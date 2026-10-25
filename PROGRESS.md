@@ -17,8 +17,15 @@ Done:
 
 Test status: 51 Vitest tests (including a 256 MB download at 16 connections, hash-checked), 6 Playwright e2e tests.
 
-Waiting on you:
-- [ ] Run Drive diagnostics on a real multi-GB file and send the report (MANUAL_STEPS §2)
+Drive results so far (1.25 GB video, Chrome 156, 25 Oct 2026):
+- [x] Virus-scan confirmation followed automatically; final URL on drive.usercontent.google.com
+- [x] Range honored (206), last byte reachable, size 1,344,850,132
+- [x] No ETag; If-Range with Last-Modified honored (resume will use Last-Modified)
+- [x] Engine worker (cookies from extension origin) sees the same file
+- [x] URL captured from a native download is reusable after cancelling it (206, same size)
+- [ ] Speed at 1/2/4/8 connections: report was copied before these finished; rerun needed
+- [ ] Real-click capture from a Drive tab
+- [ ] Full download through the engine
 
 Known limits (by design, addressed in later phases):
 - No pause/resume yet. A browser restart marks active downloads "Interrupted" (Phase 1).

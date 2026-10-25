@@ -46,6 +46,8 @@ export interface DiagnosticsReport {
   capture: CaptureResult[];
   connections: ConnectionRun[];
   fatal?: string;
+  /** False while tests are still running; a report copied mid-run is incomplete. */
+  finished: boolean;
 }
 
 export interface DiagnosticsOptions {
@@ -67,6 +69,7 @@ export function initialReport(input: string): DiagnosticsReport {
     checks: [],
     capture: [],
     connections: [],
+    finished: false,
   };
 }
 
@@ -151,6 +154,7 @@ export async function runDiagnostics(
     report.fatal = `${err.code}: ${err.message}`;
     opts.log(`Stopped: ${report.fatal}`);
   }
+  report.finished = true;
   update();
   return report;
 }

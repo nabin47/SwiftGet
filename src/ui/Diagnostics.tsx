@@ -184,12 +184,14 @@ export function Diagnostics() {
           <div className="row">
             <button
               type="button"
+              disabled={running}
+              title={running ? 'Wait until all tests finish' : undefined}
               onClick={async () => {
                 await navigator.clipboard.writeText(json);
                 setCopied(true);
               }}
             >
-              {copied ? 'Copied' : 'Copy report'}
+              {running ? 'Tests still running…' : copied ? 'Copied' : 'Copy report'}
             </button>
             <label>
               <input type="checkbox" checked={redact} onChange={(e) => setRedact(e.target.checked)} /> Redact file IDs

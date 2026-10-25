@@ -10,6 +10,7 @@ test('diagnostics resolves a Drive-style interstitial and measures connections',
 
   const report = JSON.parse((await page.getByTestId('diag-report').textContent()) ?? '{}');
   expect(report.fatal).toBeUndefined();
+  expect(report.finished).toBe(true);
   expect(report.probe.totalSize).toBe(size);
   expect(report.steps).toContain('drive page: confirm');
   const check = (name: string) => report.checks.find((c: { name: string }) => c.name === name);
