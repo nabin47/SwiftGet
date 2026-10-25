@@ -29,7 +29,9 @@ async function deliver(id: string, filename: string): Promise<void> {
   try {
     // A File from OPFS is disk-backed, so the blob URL doesn't copy the download into memory.
     const file = await getFile(opfsName(id));
-    const blobUrl = URL.createObjectURL(file);
+    // OPFS files have no MIME type, and Chrome then "fixes" the extension (foo.bin -> foo.txt).
+    // octet-stream keeps the server's filename as is. Wrapping the File in a Blob doesn't copy it.
+    const blobUrl = URL.createObjectURL(new Blob([file], { type: 'application/octet-stream' }));
     blobUrls.set(id, blobUrl);
     await chrome.runtime.sendMessage({ target: 'background', type: 'deliver', id, blobUrl, filename });
   } catch (e) {

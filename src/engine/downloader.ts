@@ -159,7 +159,9 @@ class Transfer {
     private readonly opts: DownloadOptions,
     private readonly signal: AbortSignal,
   ) {
-    this.fetch = opts.fetch ?? fetch;
+    // Never call fetch as a method: browsers throw "Illegal invocation" unless `this` is the global.
+    const f = opts.fetch ?? globalThis.fetch;
+    this.fetch = (input, init) => f(input, init);
     this.sleep = opts.sleep ?? defaultSleep;
     this.maxRetries = opts.maxRetries ?? 6;
     this.baseDelay = opts.retryBaseDelayMs ?? 500;
