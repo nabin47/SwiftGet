@@ -4,7 +4,7 @@
 import { execFileSync } from 'node:child_process';
 
 const tag = process.argv[2];
-const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim();
+const git = (...args) => execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
 
 let prev = '';
 try {
