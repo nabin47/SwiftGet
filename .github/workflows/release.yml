@@ -1,0 +1,142 @@
+name: Release
+
+# Two ways to release:
+#  1. Actions -> Release -> Run workflow: enter a version (e.g. 0.2.0) or patch/minor/major.
+#     The workflow bumps package.json, commits, tags v<version>, builds and releases.
+#  2. Push a tag v* yourself: the version is taken from the tag.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release: X.Y.Z, or patch / minor / major'
+        required: true
+        default: patch
+      store:
+        description: 'Chrome Web Store'
+        type: choice
+        options:
+          - upload only
+          - upload and publish
+          - skip
+        default: upload only
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Determine version
+        id: version
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            case "$INPUT_VERSION" in
+              patch|minor|major) npm version "$INPUT_VERSION" --no-git-tag-version ;;
+              *) npm version "$INPUT_VERSION" --no-git-tag-version --allow-same-version ;;
+            esac
+            VERSION=$(node -p "require('./package.json').version")
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+            npm version "$VERSION" --no-git-tag-version --allow-same-version
+          fi
+          # Chrome requires 1-4 dot-separated integers.
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+(\.[0-9]+){0,3}$'; then
+            echo "::error::Version '$VERSION' is not a valid Chrome extension version"; exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Test
+        run: |
+          npm run typecheck
+          npm run lint
+          npm test
+
+      - name: Commit version and tag (manual runs)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "::error::Tag $TAG already exists"; exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git commit -m "chore(release): $TAG" || echo "Version unchanged"
+          git tag -a "$TAG" -m "SwiftGet $TAG"
+          git push origin HEAD:"$GITHUB_REF_NAME" "$TAG"
+
+      - name: Build and zip
+        run: |
+          npm run zip
+          ls -la .output/*.zip
+
+      - name: Check manifest version matches tag
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          MV=$(node -p "require('./.output/chrome-mv3/manifest.json').version")
+          [ "$MV" = "$VERSION" ] || { echo "::error::manifest $MV != tag $VERSION"; exit 1; }
+
+      - name: Release notes
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: node scripts/release-notes.mjs "$TAG" > release-notes.md && cat release-notes.md
+
+      - name: GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          ZIP=$(ls .output/*-chrome.zip)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$ZIP" --clobber
+            gh release edit "$TAG" --notes-file release-notes.md
+          else
+            gh release create "$TAG" "$ZIP" --title "SwiftGet $TAG" --notes-file release-notes.md
+          fi
+
+      - name: Chrome Web Store
+        env:
+          STORE: ${{ github.event.inputs.store || 'upload only' }}
+          CWS_EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+          CWS_PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID }}
+          CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ "$STORE" = "skip" ]; then echo "Store upload skipped."; exit 0; fi
+          if [ -z "$CWS_EXTENSION_ID" ] || [ -z "$CWS_REFRESH_TOKEN" ] || [ -z "$CWS_PUBLISHER_ID" ]; then
+            echo "::warning::Chrome Web Store secrets are not set; skipping store upload. See docs/PUBLISHING.md."
+            exit 0
+          fi
+          MODE=upload
+          [ "$STORE" = "upload and publish" ] && MODE=upload-and-publish
+          node scripts/cws-upload.mjs "$(ls .output/*-chrome.zip)" "$MODE"
