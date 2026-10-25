@@ -84,8 +84,15 @@ export async function runDiagnostics(
     const start = link && !input.includes('/download') ? driveDownloadUrl(link) : input.trim();
     opts.log(`Start URL: ${start}`);
 
-    const { probe: p, steps } = await resolveDownload(start, { ...ctx, treatAsDrive: true });
-    report.steps = steps;
+    const { probe: p } = await resolveDownload(start, {
+      ...ctx,
+      treatAsDrive: true,
+      // Record steps as they happen so they survive an early failure.
+      onStep: (s) => {
+        report.steps.push(s);
+        opts.log(s);
+      },
+    });
     report.resolvedUrl = p.finalUrl;
     report.probe = {
       status: p.status,

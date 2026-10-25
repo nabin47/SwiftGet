@@ -3,6 +3,8 @@ import { download } from '../../src/engine/downloader';
 import {
   classifyDrivePage,
   driveDownloadUrl,
+  driveLinkKind,
+  driveLinkProblem,
   isDriveHost,
   parseConfirmPage,
   parseDriveLink,
@@ -37,6 +39,34 @@ describe('parseDriveLink', () => {
     expect(u.hostname).toBe('drive.usercontent.google.com');
     expect(u.searchParams.get('id')).toBe(ID);
     expect(u.searchParams.get('authuser')).toBe('1');
+  });
+});
+
+describe('driveLinkKind', () => {
+  it.each([
+    ['https://drive.google.com/drive/folders/1AQ_MV0ZOW-SYBcPL8Zk2uhpIIh-8vP53?usp=sharing', 'folder'],
+    ['https://drive.google.com/drive/u/1/folders/1AQ_MV0ZOW-SYBcPL8Zk2uhpIIh-8vP53', 'folder'],
+    ['https://drive.google.com/embeddedfolderview?id=1AQ_MV0ZOW-SYBcPL8Zk2uhpIIh-8vP53', 'folder'],
+    [`https://docs.google.com/document/d/${ID}/edit`, 'google-doc'],
+    [`https://docs.google.com/spreadsheets/d/${ID}/edit#gid=0`, 'google-doc'],
+    [`https://drive.google.com/file/d/${ID}/view`, 'file'],
+    ['https://drive.google.com/drive/my-drive', 'unknown'],
+    ['https://example.com/a.zip', null],
+  ])('%s -> %s', (link, kind) => {
+    expect(driveLinkKind(link)).toBe(kind);
+  });
+
+  it('explains folder links instead of blaming access', async () => {
+    const folder = 'https://drive.google.com/drive/folders/1AQ_MV0ZOW-SYBcPL8Zk2uhpIIh-8vP53?usp=sharing';
+    expect(driveLinkProblem(folder)).toMatch(/folder/);
+    expect(driveLinkProblem(`https://drive.google.com/file/d/${ID}/view`)).toBeUndefined();
+    // Rejected before any network request.
+    const err = await resolveDownload(folder, {
+      fetch: () => {
+        throw new Error('should not fetch');
+      },
+    }).catch((e: unknown) => e);
+    expect(err).toMatchObject({ code: 'DRIVE_NOT_FILE' });
   });
 });
 
@@ -104,10 +134,13 @@ describe('resolveDownload against a Drive-like server', () => {
     });
   });
 
-  it('reports missing access', async () => {
+  it('reports missing access, recording steps and the page title as it goes', async () => {
+    const steps: string[] = [];
     await expect(
-      resolveDownload(`${server.url}/drive/uc?id=${ID}&access=denied`, { treatAsDrive: true }),
+      resolveDownload(`${server.url}/drive/uc?id=${ID}&access=denied`, { treatAsDrive: true, onStep: (s) => steps.push(s) }),
     ).rejects.toMatchObject({ code: 'DRIVE_ACCESS' });
+    expect(steps).toContain('drive page: access');
+    expect(steps).toContain('page title: Google Drive: Sign-in');
   });
 
   it('leaves HTML from non-Drive hosts alone', async () => {

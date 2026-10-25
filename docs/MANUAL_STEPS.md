@@ -21,7 +21,7 @@ To update later: remove the old SwiftGet from `chrome://extensions` (or click th
 
 1. Make sure you are signed in to Google in this Chrome profile with an account that can open the file.
 2. Click the SwiftGet toolbar icon. The SwiftGet page opens. Click **Drive diagnostics** (top right).
-3. Paste the Drive link (the normal `https://drive.google.com/file/d/…/view` share link is fine).
+3. Paste the Drive link of **one file**: `https://drive.google.com/file/d/…/view`. A **folder** link (`…/drive/folders/…`) won't work. To get a file link, open the folder, right-click the file, choose **Share → Copy link**, or open the file's preview and choose **⋮ → Open in new window**, then copy the address.
 4. Leave **Bytes per speed test** at 64 MB (choose 128 MB on a fast connection) and keep **Test capturing a native download** ticked.
 5. Click **Run** and wait. It downloads about 4 × 64 MB in total. A download may briefly appear in Chrome's download bubble and is cancelled immediately; that is the capture test.
 6. When it finishes, run the second test: click **Wait for my click in Drive**, then in another tab open the file in Google Drive and click its **Download** button (and **Download anyway** if Drive asks). SwiftGet catches and cancels that download.

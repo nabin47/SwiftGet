@@ -8,6 +8,7 @@ export type ErrorCode =
   | 'DRIVE_QUOTA'
   | 'DRIVE_ACCESS'
   | 'DRIVE_UNRECOGNIZED'
+  | 'DRIVE_NOT_FILE'
   | 'STORAGE';
 
 export class SwiftGetError extends Error {

@@ -23,3 +23,11 @@ test('diagnostics resolves a Drive-style interstitial and measures connections',
   // Identifiers are redacted by default.
   expect(JSON.stringify(report)).not.toContain('6b1f4a2e');
 });
+
+test('diagnostics explains that a folder link is not a file', async ({ context, extensionId }) => {
+  const page = await context.newPage();
+  await page.goto(`chrome-extension://${extensionId}/diagnostics.html`);
+  await page.getByTestId('diag-input').fill('https://drive.google.com/drive/folders/1AQ_MV0ZOW-SYBcPL8Zk2uhpIIh-8vP53?usp=sharing');
+  await page.getByTestId('diag-run').click();
+  await expect(page.getByRole('alert')).toContainText('link to a Google Drive folder, not a file');
+});

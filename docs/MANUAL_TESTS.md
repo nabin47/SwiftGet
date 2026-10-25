@@ -12,6 +12,7 @@ Install the build first ([MANUAL_STEPS.md](MANUAL_STEPS.md) §1). Tick each item
 - [ ] Diagnostics "Wait for my click in Drive": the download is captured and cancelled, and the captured URL is reported as reusable or not.
 - [ ] A full download of a 1–5 GB Drive file from the SwiftGet page with 4 connections: completes, the SHA-256 is shown, and the file opens.
 - [ ] A small Drive file (< 100 MB, so no virus-scan page): downloads.
+- [ ] A folder link or Google Docs link: a message explains what to paste instead.
 - [ ] A file you **don't** have access to: a clear "check you are signed in" message, no crash.
 - [ ] If you hit Drive's quota page: the "download quota exceeded" message appears and SwiftGet does not retry endlessly.
 

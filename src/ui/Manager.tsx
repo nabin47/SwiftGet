@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useState, type FormEvent } from 'react';
 import { DEFAULT_CONNECTIONS, MAX_CONNECTIONS } from '../engine/downloader';
-import { DRIVE_DEFAULT_CONNECTIONS, driveDownloadUrl, isDriveHost, parseDriveLink } from '../engine/drive';
+import { DRIVE_DEFAULT_CONNECTIONS, driveDownloadUrl, driveLinkProblem, isDriveHost, parseDriveLink } from '../engine/drive';
 import { sanitizeFilename } from '../engine/filename';
 import { etaSeconds, formatBytes, formatDuration } from '../engine/speed';
 import { db, newDownloadId, type DownloadRecord } from '../shared/db';
@@ -23,6 +23,11 @@ export function Manager() {
       if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error();
     } catch {
       setFormError('Enter an http(s) URL.');
+      return;
+    }
+    const driveProblem = driveLinkProblem(target);
+    if (driveProblem) {
+      setFormError(driveProblem);
       return;
     }
     // A Drive "view" link becomes its direct download URL.

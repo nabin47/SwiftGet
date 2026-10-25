@@ -46,6 +46,36 @@ export function parseDriveLink(input: string): DriveLink | null {
   };
 }
 
+export type DriveLinkKind = 'file' | 'folder' | 'google-doc' | 'unknown';
+
+/** Classifies a Drive/Docs URL. Returns null for non-Google-Drive URLs. */
+export function driveLinkKind(input: string): DriveLinkKind | null {
+  let u: URL;
+  try {
+    u = new URL(input.trim());
+  } catch {
+    return null;
+  }
+  if (!isDriveHost(u.href)) return null;
+  if (/\/folders\/|\/folderview|\/embeddedfolderview/.test(u.pathname)) return 'folder';
+  if (/^\/(?:document|spreadsheets|presentation|forms|drawings)\//.test(u.pathname)) return 'google-doc';
+  return parseDriveLink(u.href) ? 'file' : 'unknown';
+}
+
+/** A user-facing explanation when a Drive link can't be downloaded as a single file, else undefined. */
+export function driveLinkProblem(input: string): string | undefined {
+  switch (driveLinkKind(input)) {
+    case 'folder':
+      return 'This is a link to a Google Drive folder, not a file. Open the folder, right-click the file, choose Share → Copy link, and paste that link.';
+    case 'google-doc':
+      return 'This is a Google Docs/Sheets/Slides document, which has no file to download directly. In the document use File → Download to export it.';
+    case 'unknown':
+      return "This Google Drive link doesn't point to a single file. Paste the file's share link (it looks like drive.google.com/file/d/…/view).";
+    default:
+      return undefined;
+  }
+}
+
 export function driveDownloadUrl(link: DriveLink): string {
   const u = new URL('https://drive.usercontent.google.com/download');
   u.searchParams.set('id', link.id);
@@ -132,19 +162,26 @@ export interface ResolveResult {
  */
 export async function resolveDownload(
   url: string,
-  ctx: RequestContext & { treatAsDrive?: boolean } = {},
+  ctx: RequestContext & { treatAsDrive?: boolean; onStep?: (step: string) => void } = {},
 ): Promise<ResolveResult> {
+  const problem = driveLinkProblem(url);
+  if (problem) throw new SwiftGetError('DRIVE_NOT_FILE', problem);
   const steps: string[] = [];
+  const step = (s: string) => {
+    steps.push(s);
+    ctx.onStep?.(s);
+  };
   let current = url;
   for (let hop = 0; hop < 3; hop++) {
     const p = await probe(current, ctx);
-    steps.push(`probe ${p.status} ${p.contentType ?? '?'} size=${p.totalSize ?? '?'} range=${p.rangeSupported}`);
+    step(`probe ${p.status} ${p.contentType ?? '?'} size=${p.totalSize ?? '?'} range=${p.rangeSupported}`);
     const drive = ctx.treatAsDrive || isDriveHost(current) || isDriveHost(p.finalUrl);
     if (!drive || !isHtml(p)) return { probe: p, steps };
 
     const html = await fetchText(p.finalUrl, ctx);
     const page = classifyDrivePage(html, p.finalUrl);
-    steps.push(`drive page: ${page.kind}`);
+    step(`drive page: ${page.kind}`);
+    if (page.kind !== 'confirm') step(`page title: ${pageTitle(html) ?? '(none)'}`);
     if (page.kind === 'quota') {
       throw new SwiftGetError(
         'DRIVE_QUOTA',
@@ -163,6 +200,11 @@ export async function resolveDownload(
     current = page.url;
   }
   throw new SwiftGetError('DRIVE_UNRECOGNIZED', 'Google Drive kept returning confirmation pages.');
+}
+
+function pageTitle(html: string): string | undefined {
+  const t = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1];
+  return t ? decodeEntities(t.replace(/\s+/g, ' ').trim()).slice(0, 120) : undefined;
 }
 
 async function fetchText(url: string, ctx: RequestContext, limit = 2 * 1024 * 1024): Promise<string> {
